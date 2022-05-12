@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8"/>
+    <title>Test Report</title>
+    <link href="assets/style.css" rel="stylesheet" type="text/css"/></head>
+  <body onLoad="init()">
+    <script>/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+
+function toArray(iter) {
+    if (iter === null) {
+        return null;
+    }
+    return Array.prototype.slice.call(iter);
+}
+
+function find(selector, elem) { // eslint-disable-line no-redeclare
+    if (!elem) {
+        elem = document;
+    }
+    return elem.querySelector(selector);
+}
+
+function findAll(selector, elem) {
+    if (!elem) {
+        elem = document;
+    }
+    return toArray(elem.querySelectorAll(selector));
+}
+
+function sortColumn(elem) {
+    toggleSortStates(elem);
+    const colIndex = toArray(elem.parentNode.childNodes).indexOf(elem);
+    let key;
+    if (elem.classList.contains('result')) {
+        key = keyResult;
+    } else if (elem.classList.contains('links')) {
+        key = keyLink;
+    } else {
+        key = keyAlpha;
+    }
+    sortTable(elem, key(colIndex));
+}
+
+function showAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(showExtras);
+}
+
+function hideAllExtras() { // eslint-disable-line no-unused-vars
+    findAll('.col-result').forEach(hideExtras);
+}
+
+function showExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.remove('collapsed');
+    expandcollapse.classList.remove('expander');
+    expandcollapse.classList.add('collapser');
+}
+
+function hideExtras(colresultElem) {
+    const extras = colresultElem.parentNode.nextElementSibling;
+    const expandcollapse = colresultElem.firstElementChild;
+    extras.classList.add('collapsed');
+    expandcollapse.classList.remove('collapser');
+    expandcollapse.classList.add('expander');
+}
+
+function showFilters() {
+    const filterItems = document.getElementsByClassName('filter');
+    for (let i = 0; i < filterItems.length; i++)
+        filterItems[i].hidden = false;
+}
+
+function addCollapse() {
+    // Add links for show/hide all
+    const resulttable = find('table#results-table');
+    const showhideall = document.createElement('p');
+    showhideall.innerHTML = '<a href="javascript:showAllExtras()">Show all details</a> / ' +
+                            '<a href="javascript:hideAllExtras()">Hide all details</a>';
+    resulttable.parentElement.insertBefore(showhideall, resulttable);
+
+    // Add show/hide link to each result
+    findAll('.col-result').forEach(function(elem) {
+        const collapsed = getQueryParameter('collapsed') || 'Passed';
+        const extras = elem.parentNode.nextElementSibling;
+        const expandcollapse = document.createElement('span');
+        if (extras.classList.contains('collapsed')) {
+            expandcollapse.classList.add('expander');
+        } else if (collapsed.includes(elem.innerHTML)) {
+            extras.classList.add('collapsed');
+            expandcollapse.classList.add('expander');
+        } else {
+            expandcollapse.classList.add('collapser');
+        }
+        elem.appendChild(expandcollapse);
+
+        elem.addEventListener('click', function(event) {
+            if (event.currentTarget.parentNode.nextElementSibling.classList.contains('collapsed')) {
+                showExtras(event.currentTarget);
+            } else {
+                hideExtras(event.currentTarget);
+            }
+        });
+    });
+}
+
+function getQueryParameter(name) {
+    const match = RegExp('[?&]' + name + '=([^&]*)').exec(window.location.search);
+    return match && decodeURIComponent(match[1].replace(/\+/g, ' '));
+}
+
+function init () { // eslint-disable-line no-unused-vars
+    resetSortHeaders();
+
+    addCollapse();
+
+    showFilters();
+
+    sortColumn(find('.initial-sort'));
+
+    findAll('.sortable').forEach(function(elem) {
+        elem.addEventListener('click',
+            function() {
+                sortColumn(elem);
+            }, false);
+    });
+}
+
+function sortTable(clicked, keyFunc) {
+    const rows = findAll('.results-table-row');
+    const reversed = !clicked.classList.contains('asc');
+    const sortedRows = sort(rows, keyFunc, reversed);
+    /* Whole table is removed here because browsers acts much slower
+     * when appending existing elements.
+     */
+    const thead = document.getElementById('results-table-head');
+    document.getElementById('results-table').remove();
+    const parent = document.createElement('table');
+    parent.id = 'results-table';
+    parent.appendChild(thead);
+    sortedRows.forEach(function(elem) {
+        parent.appendChild(elem);
+    });
+    document.getElementsByTagName('BODY')[0].appendChild(parent);
+}
+
+function sort(items, keyFunc, reversed) {
+    const sortArray = items.map(function(item, i) {
+        return [keyFunc(item), i];
+    });
+
+    sortArray.sort(function(a, b) {
+        const keyA = a[0];
+        const keyB = b[0];
+
+        if (keyA == keyB) return 0;
+
+        if (reversed) {
+            return keyA < keyB ? 1 : -1;
+        } else {
+            return keyA > keyB ? 1 : -1;
+        }
+    });
+
+    return sortArray.map(function(item) {
+        const index = item[1];
+        return items[index];
+    });
+}
+
+function keyAlpha(colIndex) {
+    return function(elem) {
+        return elem.childNodes[1].childNodes[colIndex].firstChild.data.toLowerCase();
+    };
+}
+
+function keyLink(colIndex) {
+    return function(elem) {
+        const dataCell = elem.childNodes[1].childNodes[colIndex].firstChild;
+        return dataCell == null ? '' : dataCell.innerText.toLowerCase();
+    };
+}
+
+function keyResult(colIndex) {
+    return function(elem) {
+        const strings = ['Error', 'Failed', 'Rerun', 'XFailed', 'XPassed',
+            'Skipped', 'Passed'];
+        return strings.indexOf(elem.childNodes[1].childNodes[colIndex].firstChild.data);
+    };
+}
+
+function resetSortHeaders() {
+    findAll('.sort-icon').forEach(function(elem) {
+        elem.parentNode.removeChild(elem);
+    });
+    findAll('.sortable').forEach(function(elem) {
+        const icon = document.createElement('div');
+        icon.className = 'sort-icon';
+        icon.textContent = 'vvv';
+        elem.insertBefore(icon, elem.firstChild);
+        elem.classList.remove('desc', 'active');
+        elem.classList.add('asc', 'inactive');
+    });
+}
+
+function toggleSortStates(elem) {
+    //if active, toggle between asc and desc
+    if (elem.classList.contains('active')) {
+        elem.classList.toggle('asc');
+        elem.classList.toggle('desc');
+    }
+
+    //if inactive, reset all other functions and add ascending active
+    if (elem.classList.contains('inactive')) {
+        resetSortHeaders();
+        elem.classList.remove('inactive');
+        elem.classList.add('active');
+    }
+}
+
+function isAllRowsHidden(value) {
+    return value.hidden == false;
+}
+
+function filterTable(elem) { // eslint-disable-line no-unused-vars
+    const outcomeAtt = 'data-test-result';
+    const outcome = elem.getAttribute(outcomeAtt);
+    const classOutcome = outcome + ' results-table-row';
+    const outcomeRows = document.getElementsByClassName(classOutcome);
+
+    for(let i = 0; i < outcomeRows.length; i++){
+        outcomeRows[i].hidden = !elem.checked;
+    }
+
+    const rows = findAll('.results-table-row').filter(isAllRowsHidden);
+    const allRowsHidden = rows.length == 0 ? true : false;
+    const notFoundMessage = document.getElementById('not-found-message');
+    notFoundMessage.hidden = !allRowsHidden;
+}
+</script>
+    <h1>report.html</h1>
+    <p>Report generated on 08-May-2022 at 23:31:12 by <a href="https://pypi.python.org/pypi/pytest-html">pytest-html</a> v3.1.1</p>
+    <h2>Environment</h2>
+    <table id="environment">
+      <tr>
+        <td>Packages</td>
+        <td>{"pluggy": "1.0.0", "py": "1.11.0", "pytest": "7.1.2"}</td></tr>
+      <tr>
+        <td>Platform</td>
+        <td>Windows-10-10.0.19044-SP0</td></tr>
+      <tr>
+        <td>Plugins</td>
+        <td>{"html": "3.1.1", "metadata": "2.0.1"}</td></tr>
+      <tr>
+        <td>Python</td>
+        <td>3.10.4</td></tr></table>
+    <h2>Summary</h2>
+    <p>7 tests ran in 85.68 seconds. </p>
+    <p class="filter" hidden="true">(Un)check the boxes to filter the results.</p><input checked="true" class="filter" data-test-result="passed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="passed">5 passed</span>, <input checked="true" class="filter" data-test-result="skipped" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="skipped">0 skipped</span>, <input checked="true" class="filter" data-test-result="failed" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="failed">2 failed</span>, <input checked="true" class="filter" data-test-result="error" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="error">1 errors</span>, <input checked="true" class="filter" data-test-result="xfailed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xfailed">0 expected failures</span>, <input checked="true" class="filter" data-test-result="xpassed" disabled="true" hidden="true" name="filter_checkbox" onChange="filterTable(this)" type="checkbox"/><span class="xpassed">0 unexpected passes</span>
+    <h2>Results</h2>
+    <table id="results-table">
+      <thead id="results-table-head">
+        <tr>
+          <th class="sortable result initial-sort" col="result">Result</th>
+          <th class="sortable" col="name">Test</th>
+          <th class="sortable" col="duration">Duration</th>
+          <th class="sortable links" col="links">Links</th></tr>
+        <tr hidden="true" id="not-found-message">
+          <th colspan="4">No results found. Try to check the filters</th></tr></thead>
+      <tbody class="error results-table-row">
+        <tr>
+          <td class="col-result">Error</td>
+          <td class="col-name">advanced_test.py::test_remove_item_from_cart::teardown</td>
+          <td class="col-duration">12.47</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">def teardown():<br/>        capture_evidence()<br/>        driver.quit()<br/>&gt;       request.addfinalizer(teardown)<br/><span class="error">E       AttributeError: module &#x27;urllib.request&#x27; has no attribute &#x27;addfinalizer&#x27;</span><br/><br/>advanced_test.py:54: AttributeError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">advanced_test.py::test_login_invalid_credentials[performance_glitch_user1-secret_sauce-Username and password do not match any user in this service]</td>
+          <td class="col-duration">13.20</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">username = &#x27;performance_glitch_user1&#x27;, password = &#x27;secret_sauce&#x27;<br/>checkpoint = &#x27;Username and password do not match any user in this service&#x27;<br/><br/>    @pytest.mark.parametrize(&quot;username, password, checkpoint&quot;, login_form_parameters)<br/>    def test_login_invalid_credentials(username, password, checkpoint):<br/>        launch_swaglabs()<br/>        driver.find_element(By.ID, &#x27;user-name&#x27;).send_keys(username)<br/>        driver.find_element(By. NAME, &#x27;password&#x27;).send_keys(password)<br/>        driver.find_element(By.CLASS_NAME, &#x27;submit-button &#x27;).click()<br/>        sleep(5)<br/>&gt;       assert checkpoint in driver.page_source.lower()<br/><span class="error">E       assert &#x27;Username and password do not match any user in this service&#x27; in &#x27;&lt;html lang=&quot;en&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;style type=&quot;text/css&quot;&gt;svg:not(:root).svg-inline--fa {\n  overflow: visible;\n}\n\n.svg-inline--fa {\n  display: inline-block;\n  font-size: inherit;\n  height: 1em;\n  overflow: visible;\n  vertical-align: -0.125em;\n}\n.svg-inline--fa.fa-lg {\n  vertical-align: -0.225em;\n}\n.svg-inline--fa.fa-w-1 {\n  width: 0.0625em;\n}\n.svg-inline--fa.fa-w-2 {\n  width: 0.125em;\n}\n.svg-inline--fa.fa-w-3 {\n  width: 0.1875em;\n}\n.svg-inline--fa.fa-w-4 {\n  width: 0.25em;\n}\n.svg-inline--fa.fa-w-5 {\n  width: 0.3125em;\n}\n.svg-inline--fa.fa-w-6 {\n  width: 0.375em;\n}\n.svg-inline--fa.fa-w-7 {\n  width: 0.4375em;\n}\n.svg-inline--fa.fa-w-8 {\n  width: 0.5em;\n}\n.svg-inline--fa.fa-w-9 {\n  width: 0.5625em;\n}\n.svg-inline--fa.fa-w-10 {\n  width: 0.625em;\n}\n.svg-inline--fa.fa-w-11 {\n  width: 0.6875em;\n}\n.svg-inline--fa.fa-w-12 {\n  width: 0.75em;\n}\n.svg-inline--fa.fa-w-13 {\n  width: 0.8125em;\n}\n.svg-inline--fa.fa-w-14 {\n  width: 0.875em;\n}\n.svg-inline--fa.fa-w-15 {\n  width: 0.9375em;\n}\n.svg-inline--fa.fa-w-16 {\n  width: 1em;\n}\n.svg-inline--fa.fa-w-17 {\n  width: 1.0625em;\n}\n.svg-inline--fa.fa-w-18 {\n  width: 1.125em;\n}\n....},o={1:0},u=[];function p(r){if(n[r])return n[r].exports;var t=n[r]={i:r,l:!1,exports:{}};return e[r].call(t.exports,t,t.exports,p),t.l=!0,t.exports}p.m=e,p.c=n,p.d=function(e,r,t){p.o(e,r)||object.defineproperty(e,r,{enumerable:!0,get:t})},p.r=function(e){&quot;undefined&quot;!=typeof symbol&amp;&amp;symbol.tostringtag&amp;&amp;object.defineproperty(e,symbol.tostringtag,{value:&quot;module&quot;}),object.defineproperty(e,&quot;__esmodule&quot;,{value:!0})},p.t=function(e,r){if(1&amp;r&amp;&amp;(e=p(e)),8&amp;r)return e;if(4&amp;r&amp;&amp;&quot;object&quot;==typeof e&amp;&amp;e&amp;&amp;e.__esmodule)return e;var t=object.create(null);if(p.r(t),object.defineproperty(t,&quot;default&quot;,{enumerable:!0,value:e}),2&amp;r&amp;&amp;&quot;string&quot;!=typeof e)for(var n in e)p.d(t,n,function(r){return e[r]}.bind(null,n));return t},p.n=function(e){var r=e&amp;&amp;e.__esmodule?function(){return e.default}:function(){return e};return p.d(r,&quot;a&quot;,r),r},p.o=function(e,r){return object.prototype.hasownproperty.call(e,r)},p.p=&quot;/&quot;;var l=this[&quot;webpackjsonpsample-app-web&quot;]=this[&quot;webpackjsonpsample-app-web&quot;]||[],a=l.push.bind(l);l.push=r,l=l.slice();for(var f=0;f&lt;l.length;f++)r(l[f]);var i=a;t()}([])&lt;/script&gt;&lt;script src=&quot;/static/js/2.a1a947cf.chunk.js&quot;&gt;&lt;/script&gt;&lt;script src=&quot;/static/js/main.3db41035.chunk.js&quot;&gt;&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;&#x27;</span><br/><span class="error">E        +  where &#x27;&lt;html lang=&quot;en&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;style type=&quot;text/css&quot;&gt;svg:not(:root).svg-inline--fa {\n  overflow: visible;\n}\n\n.svg-inline--fa {\n  display: inline-block;\n  font-size: inherit;\n  height: 1em;\n  overflow: visible;\n  vertical-align: -0.125em;\n}\n.svg-inline--fa.fa-lg {\n  vertical-align: -0.225em;\n}\n.svg-inline--fa.fa-w-1 {\n  width: 0.0625em;\n}\n.svg-inline--fa.fa-w-2 {\n  width: 0.125em;\n}\n.svg-inline--fa.fa-w-3 {\n  width: 0.1875em;\n}\n.svg-inline--fa.fa-w-4 {\n  width: 0.25em;\n}\n.svg-inline--fa.fa-w-5 {\n  width: 0.3125em;\n}\n.svg-inline--fa.fa-w-6 {\n  width: 0.375em;\n}\n.svg-inline--fa.fa-w-7 {\n  width: 0.4375em;\n}\n.svg-inline--fa.fa-w-8 {\n  width: 0.5em;\n}\n.svg-inline--fa.fa-w-9 {\n  width: 0.5625em;\n}\n.svg-inline--fa.fa-w-10 {\n  width: 0.625em;\n}\n.svg-inline--fa.fa-w-11 {\n  width: 0.6875em;\n}\n.svg-inline--fa.fa-w-12 {\n  width: 0.75em;\n}\n.svg-inline--fa.fa-w-13 {\n  width: 0.8125em;\n}\n.svg-inline--fa.fa-w-14 {\n  width: 0.875em;\n}\n.svg-inline--fa.fa-w-15 {\n  width: 0.9375em;\n}\n.svg-inline--fa.fa-w-16 {\n  width: 1em;\n}\n.svg-inline--fa.fa-w-17 {\n  width: 1.0625em;\n}\n.svg-inline--fa.fa-w-18 {\n  width: 1.125em;\n}\n....},o={1:0},u=[];function p(r){if(n[r])return n[r].exports;var t=n[r]={i:r,l:!1,exports:{}};return e[r].call(t.exports,t,t.exports,p),t.l=!0,t.exports}p.m=e,p.c=n,p.d=function(e,r,t){p.o(e,r)||object.defineproperty(e,r,{enumerable:!0,get:t})},p.r=function(e){&quot;undefined&quot;!=typeof symbol&amp;&amp;symbol.tostringtag&amp;&amp;object.defineproperty(e,symbol.tostringtag,{value:&quot;module&quot;}),object.defineproperty(e,&quot;__esmodule&quot;,{value:!0})},p.t=function(e,r){if(1&amp;r&amp;&amp;(e=p(e)),8&amp;r)return e;if(4&amp;r&amp;&amp;&quot;object&quot;==typeof e&amp;&amp;e&amp;&amp;e.__esmodule)return e;var t=object.create(null);if(p.r(t),object.defineproperty(t,&quot;default&quot;,{enumerable:!0,value:e}),2&amp;r&amp;&amp;&quot;string&quot;!=typeof e)for(var n in e)p.d(t,n,function(r){return e[r]}.bind(null,n));return t},p.n=function(e){var r=e&amp;&amp;e.__esmodule?function(){return e.default}:function(){return e};return p.d(r,&quot;a&quot;,r),r},p.o=function(e,r){return object.prototype.hasownproperty.call(e,r)},p.p=&quot;/&quot;;var l=this[&quot;webpackjsonpsample-app-web&quot;]=this[&quot;webpackjsonpsample-app-web&quot;]||[],a=l.push.bind(l);l.push=r,l=l.slice();for(var f=0;f&lt;l.length;f++)r(l[f]);var i=a;t()}([])&lt;/script&gt;&lt;script src=&quot;/static/js/2.a1a947cf.chunk.js&quot;&gt;&lt;/script&gt;&lt;script src=&quot;/static/js/main.3db41035.chunk.js&quot;&gt;&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;&#x27; = &lt;built-in method lower of str object at 0x0000021181B26740&gt;()</span><br/><span class="error">E        +    where &lt;built-in method lower of str object at 0x0000021181B26740&gt; = &#x27;&lt;html lang=&quot;en&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;style type=&quot;text/css&quot;&gt;svg:not(:root).svg-inline--fa {\n  overflow: visible;\n}\n\n.svg-inline--fa {\n  display: inline-block;\n  font-size: inherit;\n  height: 1em;\n  overflow: visible;\n  vertical-align: -0.125em;\n}\n.svg-inline--fa.fa-lg {\n  vertical-align: -0.225em;\n}\n.svg-inline--fa.fa-w-1 {\n  width: 0.0625em;\n}\n.svg-inline--fa.fa-w-2 {\n  width: 0.125em;\n}\n.svg-inline--fa.fa-w-3 {\n  width: 0.1875em;\n}\n.svg-inline--fa.fa-w-4 {\n  width: 0.25em;\n}\n.svg-inline--fa.fa-w-5 {\n  width: 0.3125em;\n}\n.svg-inline--fa.fa-w-6 {\n  width: 0.375em;\n}\n.svg-inline--fa.fa-w-7 {\n  width: 0.4375em;\n}\n.svg-inline--fa.fa-w-8 {\n  width: 0.5em;\n}\n.svg-inline--fa.fa-w-9 {\n  width: 0.5625em;\n}\n.svg-inline--fa.fa-w-10 {\n  width: 0.625em;\n}\n.svg-inline--fa.fa-w-11 {\n  width: 0.6875em;\n}\n.svg-inline--fa.fa-w-12 {\n  width: 0.75em;\n}\n.svg-inline--fa.fa-w-13 {\n  width: 0.8125em;\n}\n.svg-inline--fa.fa-w-14 {\n  width: 0.875em;\n}\n.svg-inline--fa.fa-w-15 {\n  width: 0.9375em;\n}\n.svg-inline--fa.fa-w-16 {\n  width: 1em;\n}\n.svg-inline--fa.fa-w-17 {\n  width: 1.0625em;\n}\n.svg-inline--fa.fa-w-18 {\n  width: 1.125em;\n}\n....},o={1:0},u=[];function p(r){if(n[r])return n[r].exports;var t=n[r]={i:r,l:!1,exports:{}};return e[r].call(t.exports,t,t.exports,p),t.l=!0,t.exports}p.m=e,p.c=n,p.d=function(e,r,t){p.o(e,r)||Object.defineProperty(e,r,{enumerable:!0,get:t})},p.r=function(e){&quot;undefined&quot;!=typeof Symbol&amp;&amp;Symbol.toStringTag&amp;&amp;Object.defineProperty(e,Symbol.toStringTag,{value:&quot;Module&quot;}),Object.defineProperty(e,&quot;__esModule&quot;,{value:!0})},p.t=function(e,r){if(1&amp;r&amp;&amp;(e=p(e)),8&amp;r)return e;if(4&amp;r&amp;&amp;&quot;object&quot;==typeof e&amp;&amp;e&amp;&amp;e.__esModule)return e;var t=Object.create(null);if(p.r(t),Object.defineProperty(t,&quot;default&quot;,{enumerable:!0,value:e}),2&amp;r&amp;&amp;&quot;string&quot;!=typeof e)for(var n in e)p.d(t,n,function(r){return e[r]}.bind(null,n));return t},p.n=function(e){var r=e&amp;&amp;e.__esModule?function(){return e.default}:function(){return e};return p.d(r,&quot;a&quot;,r),r},p.o=function(e,r){return Object.prototype.hasOwnProperty.call(e,r)},p.p=&quot;/&quot;;var l=this[&quot;webpackJsonpsample-app-web&quot;]=this[&quot;webpackJsonpsample-app-web&quot;]||[],a=l.push.bind(l);l.push=r,l=l.slice();for(var f=0;f&lt;l.length;f++)r(l[f]);var i=a;t()}([])&lt;/script&gt;&lt;script src=&quot;/static/js/2.a1a947cf.chunk.js&quot;&gt;&lt;/script&gt;&lt;script src=&quot;/static/js/main.3db41035.chunk.js&quot;&gt;&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;&#x27;.lower</span><br/><span class="error">E        +      where &#x27;&lt;html lang=&quot;en&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;style type=&quot;text/css&quot;&gt;svg:not(:root).svg-inline--fa {\n  overflow: visible;\n}\n\n.svg-inline--fa {\n  display: inline-block;\n  font-size: inherit;\n  height: 1em;\n  overflow: visible;\n  vertical-align: -0.125em;\n}\n.svg-inline--fa.fa-lg {\n  vertical-align: -0.225em;\n}\n.svg-inline--fa.fa-w-1 {\n  width: 0.0625em;\n}\n.svg-inline--fa.fa-w-2 {\n  width: 0.125em;\n}\n.svg-inline--fa.fa-w-3 {\n  width: 0.1875em;\n}\n.svg-inline--fa.fa-w-4 {\n  width: 0.25em;\n}\n.svg-inline--fa.fa-w-5 {\n  width: 0.3125em;\n}\n.svg-inline--fa.fa-w-6 {\n  width: 0.375em;\n}\n.svg-inline--fa.fa-w-7 {\n  width: 0.4375em;\n}\n.svg-inline--fa.fa-w-8 {\n  width: 0.5em;\n}\n.svg-inline--fa.fa-w-9 {\n  width: 0.5625em;\n}\n.svg-inline--fa.fa-w-10 {\n  width: 0.625em;\n}\n.svg-inline--fa.fa-w-11 {\n  width: 0.6875em;\n}\n.svg-inline--fa.fa-w-12 {\n  width: 0.75em;\n}\n.svg-inline--fa.fa-w-13 {\n  width: 0.8125em;\n}\n.svg-inline--fa.fa-w-14 {\n  width: 0.875em;\n}\n.svg-inline--fa.fa-w-15 {\n  width: 0.9375em;\n}\n.svg-inline--fa.fa-w-16 {\n  width: 1em;\n}\n.svg-inline--fa.fa-w-17 {\n  width: 1.0625em;\n}\n.svg-inline--fa.fa-w-18 {\n  width: 1.125em;\n}\n....},o={1:0},u=[];function p(r){if(n[r])return n[r].exports;var t=n[r]={i:r,l:!1,exports:{}};return e[r].call(t.exports,t,t.exports,p),t.l=!0,t.exports}p.m=e,p.c=n,p.d=function(e,r,t){p.o(e,r)||Object.defineProperty(e,r,{enumerable:!0,get:t})},p.r=function(e){&quot;undefined&quot;!=typeof Symbol&amp;&amp;Symbol.toStringTag&amp;&amp;Object.defineProperty(e,Symbol.toStringTag,{value:&quot;Module&quot;}),Object.defineProperty(e,&quot;__esModule&quot;,{value:!0})},p.t=function(e,r){if(1&amp;r&amp;&amp;(e=p(e)),8&amp;r)return e;if(4&amp;r&amp;&amp;&quot;object&quot;==typeof e&amp;&amp;e&amp;&amp;e.__esModule)return e;var t=Object.create(null);if(p.r(t),Object.defineProperty(t,&quot;default&quot;,{enumerable:!0,value:e}),2&amp;r&amp;&amp;&quot;string&quot;!=typeof e)for(var n in e)p.d(t,n,function(r){return e[r]}.bind(null,n));return t},p.n=function(e){var r=e&amp;&amp;e.__esModule?function(){return e.default}:function(){return e};return p.d(r,&quot;a&quot;,r),r},p.o=function(e,r){return Object.prototype.hasOwnProperty.call(e,r)},p.p=&quot;/&quot;;var l=this[&quot;webpackJsonpsample-app-web&quot;]=this[&quot;webpackJsonpsample-app-web&quot;]||[],a=l.push.bind(l);l.push=r,l=l.slice();for(var f=0;f&lt;l.length;f++)r(l[f]);var i=a;t()}([])&lt;/script&gt;&lt;script src=&quot;/static/js/2.a1a947cf.chunk.js&quot;&gt;&lt;/script&gt;&lt;script src=&quot;/static/js/main.3db41035.chunk.js&quot;&gt;&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;&#x27; = &lt;selenium.webdriver.firefox.webdriver.WebDriver (session=&quot;d5cd6778-9bf6-4634-a3e0-e12ee0e11d03&quot;)&gt;.page_source</span><br/><br/>advanced_test.py:41: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="failed results-table-row">
+        <tr>
+          <td class="col-result">Failed</td>
+          <td class="col-name">advanced_test.py::test_login_invalid_credentials[standard_user-secret_sauce1-Username and password do not match any user in this service]</td>
+          <td class="col-duration">12.67</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log">username = &#x27;standard_user&#x27;, password = &#x27;secret_sauce1&#x27;<br/>checkpoint = &#x27;Username and password do not match any user in this service&#x27;<br/><br/>    @pytest.mark.parametrize(&quot;username, password, checkpoint&quot;, login_form_parameters)<br/>    def test_login_invalid_credentials(username, password, checkpoint):<br/>        launch_swaglabs()<br/>        driver.find_element(By.ID, &#x27;user-name&#x27;).send_keys(username)<br/>        driver.find_element(By. NAME, &#x27;password&#x27;).send_keys(password)<br/>        driver.find_element(By.CLASS_NAME, &#x27;submit-button &#x27;).click()<br/>        sleep(5)<br/>&gt;       assert checkpoint in driver.page_source.lower()<br/><span class="error">E       assert &#x27;Username and password do not match any user in this service&#x27; in &#x27;&lt;html lang=&quot;en&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;style type=&quot;text/css&quot;&gt;svg:not(:root).svg-inline--fa {\n  overflow: visible;\n}\n\n.svg-inline--fa {\n  display: inline-block;\n  font-size: inherit;\n  height: 1em;\n  overflow: visible;\n  vertical-align: -0.125em;\n}\n.svg-inline--fa.fa-lg {\n  vertical-align: -0.225em;\n}\n.svg-inline--fa.fa-w-1 {\n  width: 0.0625em;\n}\n.svg-inline--fa.fa-w-2 {\n  width: 0.125em;\n}\n.svg-inline--fa.fa-w-3 {\n  width: 0.1875em;\n}\n.svg-inline--fa.fa-w-4 {\n  width: 0.25em;\n}\n.svg-inline--fa.fa-w-5 {\n  width: 0.3125em;\n}\n.svg-inline--fa.fa-w-6 {\n  width: 0.375em;\n}\n.svg-inline--fa.fa-w-7 {\n  width: 0.4375em;\n}\n.svg-inline--fa.fa-w-8 {\n  width: 0.5em;\n}\n.svg-inline--fa.fa-w-9 {\n  width: 0.5625em;\n}\n.svg-inline--fa.fa-w-10 {\n  width: 0.625em;\n}\n.svg-inline--fa.fa-w-11 {\n  width: 0.6875em;\n}\n.svg-inline--fa.fa-w-12 {\n  width: 0.75em;\n}\n.svg-inline--fa.fa-w-13 {\n  width: 0.8125em;\n}\n.svg-inline--fa.fa-w-14 {\n  width: 0.875em;\n}\n.svg-inline--fa.fa-w-15 {\n  width: 0.9375em;\n}\n.svg-inline--fa.fa-w-16 {\n  width: 1em;\n}\n.svg-inline--fa.fa-w-17 {\n  width: 1.0625em;\n}\n.svg-inline--fa.fa-w-18 {\n  width: 1.125em;\n}\n....},o={1:0},u=[];function p(r){if(n[r])return n[r].exports;var t=n[r]={i:r,l:!1,exports:{}};return e[r].call(t.exports,t,t.exports,p),t.l=!0,t.exports}p.m=e,p.c=n,p.d=function(e,r,t){p.o(e,r)||object.defineproperty(e,r,{enumerable:!0,get:t})},p.r=function(e){&quot;undefined&quot;!=typeof symbol&amp;&amp;symbol.tostringtag&amp;&amp;object.defineproperty(e,symbol.tostringtag,{value:&quot;module&quot;}),object.defineproperty(e,&quot;__esmodule&quot;,{value:!0})},p.t=function(e,r){if(1&amp;r&amp;&amp;(e=p(e)),8&amp;r)return e;if(4&amp;r&amp;&amp;&quot;object&quot;==typeof e&amp;&amp;e&amp;&amp;e.__esmodule)return e;var t=object.create(null);if(p.r(t),object.defineproperty(t,&quot;default&quot;,{enumerable:!0,value:e}),2&amp;r&amp;&amp;&quot;string&quot;!=typeof e)for(var n in e)p.d(t,n,function(r){return e[r]}.bind(null,n));return t},p.n=function(e){var r=e&amp;&amp;e.__esmodule?function(){return e.default}:function(){return e};return p.d(r,&quot;a&quot;,r),r},p.o=function(e,r){return object.prototype.hasownproperty.call(e,r)},p.p=&quot;/&quot;;var l=this[&quot;webpackjsonpsample-app-web&quot;]=this[&quot;webpackjsonpsample-app-web&quot;]||[],a=l.push.bind(l);l.push=r,l=l.slice();for(var f=0;f&lt;l.length;f++)r(l[f]);var i=a;t()}([])&lt;/script&gt;&lt;script src=&quot;/static/js/2.a1a947cf.chunk.js&quot;&gt;&lt;/script&gt;&lt;script src=&quot;/static/js/main.3db41035.chunk.js&quot;&gt;&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;&#x27;</span><br/><span class="error">E        +  where &#x27;&lt;html lang=&quot;en&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;style type=&quot;text/css&quot;&gt;svg:not(:root).svg-inline--fa {\n  overflow: visible;\n}\n\n.svg-inline--fa {\n  display: inline-block;\n  font-size: inherit;\n  height: 1em;\n  overflow: visible;\n  vertical-align: -0.125em;\n}\n.svg-inline--fa.fa-lg {\n  vertical-align: -0.225em;\n}\n.svg-inline--fa.fa-w-1 {\n  width: 0.0625em;\n}\n.svg-inline--fa.fa-w-2 {\n  width: 0.125em;\n}\n.svg-inline--fa.fa-w-3 {\n  width: 0.1875em;\n}\n.svg-inline--fa.fa-w-4 {\n  width: 0.25em;\n}\n.svg-inline--fa.fa-w-5 {\n  width: 0.3125em;\n}\n.svg-inline--fa.fa-w-6 {\n  width: 0.375em;\n}\n.svg-inline--fa.fa-w-7 {\n  width: 0.4375em;\n}\n.svg-inline--fa.fa-w-8 {\n  width: 0.5em;\n}\n.svg-inline--fa.fa-w-9 {\n  width: 0.5625em;\n}\n.svg-inline--fa.fa-w-10 {\n  width: 0.625em;\n}\n.svg-inline--fa.fa-w-11 {\n  width: 0.6875em;\n}\n.svg-inline--fa.fa-w-12 {\n  width: 0.75em;\n}\n.svg-inline--fa.fa-w-13 {\n  width: 0.8125em;\n}\n.svg-inline--fa.fa-w-14 {\n  width: 0.875em;\n}\n.svg-inline--fa.fa-w-15 {\n  width: 0.9375em;\n}\n.svg-inline--fa.fa-w-16 {\n  width: 1em;\n}\n.svg-inline--fa.fa-w-17 {\n  width: 1.0625em;\n}\n.svg-inline--fa.fa-w-18 {\n  width: 1.125em;\n}\n....},o={1:0},u=[];function p(r){if(n[r])return n[r].exports;var t=n[r]={i:r,l:!1,exports:{}};return e[r].call(t.exports,t,t.exports,p),t.l=!0,t.exports}p.m=e,p.c=n,p.d=function(e,r,t){p.o(e,r)||object.defineproperty(e,r,{enumerable:!0,get:t})},p.r=function(e){&quot;undefined&quot;!=typeof symbol&amp;&amp;symbol.tostringtag&amp;&amp;object.defineproperty(e,symbol.tostringtag,{value:&quot;module&quot;}),object.defineproperty(e,&quot;__esmodule&quot;,{value:!0})},p.t=function(e,r){if(1&amp;r&amp;&amp;(e=p(e)),8&amp;r)return e;if(4&amp;r&amp;&amp;&quot;object&quot;==typeof e&amp;&amp;e&amp;&amp;e.__esmodule)return e;var t=object.create(null);if(p.r(t),object.defineproperty(t,&quot;default&quot;,{enumerable:!0,value:e}),2&amp;r&amp;&amp;&quot;string&quot;!=typeof e)for(var n in e)p.d(t,n,function(r){return e[r]}.bind(null,n));return t},p.n=function(e){var r=e&amp;&amp;e.__esmodule?function(){return e.default}:function(){return e};return p.d(r,&quot;a&quot;,r),r},p.o=function(e,r){return object.prototype.hasownproperty.call(e,r)},p.p=&quot;/&quot;;var l=this[&quot;webpackjsonpsample-app-web&quot;]=this[&quot;webpackjsonpsample-app-web&quot;]||[],a=l.push.bind(l);l.push=r,l=l.slice();for(var f=0;f&lt;l.length;f++)r(l[f]);var i=a;t()}([])&lt;/script&gt;&lt;script src=&quot;/static/js/2.a1a947cf.chunk.js&quot;&gt;&lt;/script&gt;&lt;script src=&quot;/static/js/main.3db41035.chunk.js&quot;&gt;&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;&#x27; = &lt;built-in method lower of str object at 0x0000021181B631A0&gt;()</span><br/><span class="error">E        +    where &lt;built-in method lower of str object at 0x0000021181B631A0&gt; = &#x27;&lt;html lang=&quot;en&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;style type=&quot;text/css&quot;&gt;svg:not(:root).svg-inline--fa {\n  overflow: visible;\n}\n\n.svg-inline--fa {\n  display: inline-block;\n  font-size: inherit;\n  height: 1em;\n  overflow: visible;\n  vertical-align: -0.125em;\n}\n.svg-inline--fa.fa-lg {\n  vertical-align: -0.225em;\n}\n.svg-inline--fa.fa-w-1 {\n  width: 0.0625em;\n}\n.svg-inline--fa.fa-w-2 {\n  width: 0.125em;\n}\n.svg-inline--fa.fa-w-3 {\n  width: 0.1875em;\n}\n.svg-inline--fa.fa-w-4 {\n  width: 0.25em;\n}\n.svg-inline--fa.fa-w-5 {\n  width: 0.3125em;\n}\n.svg-inline--fa.fa-w-6 {\n  width: 0.375em;\n}\n.svg-inline--fa.fa-w-7 {\n  width: 0.4375em;\n}\n.svg-inline--fa.fa-w-8 {\n  width: 0.5em;\n}\n.svg-inline--fa.fa-w-9 {\n  width: 0.5625em;\n}\n.svg-inline--fa.fa-w-10 {\n  width: 0.625em;\n}\n.svg-inline--fa.fa-w-11 {\n  width: 0.6875em;\n}\n.svg-inline--fa.fa-w-12 {\n  width: 0.75em;\n}\n.svg-inline--fa.fa-w-13 {\n  width: 0.8125em;\n}\n.svg-inline--fa.fa-w-14 {\n  width: 0.875em;\n}\n.svg-inline--fa.fa-w-15 {\n  width: 0.9375em;\n}\n.svg-inline--fa.fa-w-16 {\n  width: 1em;\n}\n.svg-inline--fa.fa-w-17 {\n  width: 1.0625em;\n}\n.svg-inline--fa.fa-w-18 {\n  width: 1.125em;\n}\n....},o={1:0},u=[];function p(r){if(n[r])return n[r].exports;var t=n[r]={i:r,l:!1,exports:{}};return e[r].call(t.exports,t,t.exports,p),t.l=!0,t.exports}p.m=e,p.c=n,p.d=function(e,r,t){p.o(e,r)||Object.defineProperty(e,r,{enumerable:!0,get:t})},p.r=function(e){&quot;undefined&quot;!=typeof Symbol&amp;&amp;Symbol.toStringTag&amp;&amp;Object.defineProperty(e,Symbol.toStringTag,{value:&quot;Module&quot;}),Object.defineProperty(e,&quot;__esModule&quot;,{value:!0})},p.t=function(e,r){if(1&amp;r&amp;&amp;(e=p(e)),8&amp;r)return e;if(4&amp;r&amp;&amp;&quot;object&quot;==typeof e&amp;&amp;e&amp;&amp;e.__esModule)return e;var t=Object.create(null);if(p.r(t),Object.defineProperty(t,&quot;default&quot;,{enumerable:!0,value:e}),2&amp;r&amp;&amp;&quot;string&quot;!=typeof e)for(var n in e)p.d(t,n,function(r){return e[r]}.bind(null,n));return t},p.n=function(e){var r=e&amp;&amp;e.__esModule?function(){return e.default}:function(){return e};return p.d(r,&quot;a&quot;,r),r},p.o=function(e,r){return Object.prototype.hasOwnProperty.call(e,r)},p.p=&quot;/&quot;;var l=this[&quot;webpackJsonpsample-app-web&quot;]=this[&quot;webpackJsonpsample-app-web&quot;]||[],a=l.push.bind(l);l.push=r,l=l.slice();for(var f=0;f&lt;l.length;f++)r(l[f]);var i=a;t()}([])&lt;/script&gt;&lt;script src=&quot;/static/js/2.a1a947cf.chunk.js&quot;&gt;&lt;/script&gt;&lt;script src=&quot;/static/js/main.3db41035.chunk.js&quot;&gt;&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;&#x27;.lower</span><br/><span class="error">E        +      where &#x27;&lt;html lang=&quot;en&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;style type=&quot;text/css&quot;&gt;svg:not(:root).svg-inline--fa {\n  overflow: visible;\n}\n\n.svg-inline--fa {\n  display: inline-block;\n  font-size: inherit;\n  height: 1em;\n  overflow: visible;\n  vertical-align: -0.125em;\n}\n.svg-inline--fa.fa-lg {\n  vertical-align: -0.225em;\n}\n.svg-inline--fa.fa-w-1 {\n  width: 0.0625em;\n}\n.svg-inline--fa.fa-w-2 {\n  width: 0.125em;\n}\n.svg-inline--fa.fa-w-3 {\n  width: 0.1875em;\n}\n.svg-inline--fa.fa-w-4 {\n  width: 0.25em;\n}\n.svg-inline--fa.fa-w-5 {\n  width: 0.3125em;\n}\n.svg-inline--fa.fa-w-6 {\n  width: 0.375em;\n}\n.svg-inline--fa.fa-w-7 {\n  width: 0.4375em;\n}\n.svg-inline--fa.fa-w-8 {\n  width: 0.5em;\n}\n.svg-inline--fa.fa-w-9 {\n  width: 0.5625em;\n}\n.svg-inline--fa.fa-w-10 {\n  width: 0.625em;\n}\n.svg-inline--fa.fa-w-11 {\n  width: 0.6875em;\n}\n.svg-inline--fa.fa-w-12 {\n  width: 0.75em;\n}\n.svg-inline--fa.fa-w-13 {\n  width: 0.8125em;\n}\n.svg-inline--fa.fa-w-14 {\n  width: 0.875em;\n}\n.svg-inline--fa.fa-w-15 {\n  width: 0.9375em;\n}\n.svg-inline--fa.fa-w-16 {\n  width: 1em;\n}\n.svg-inline--fa.fa-w-17 {\n  width: 1.0625em;\n}\n.svg-inline--fa.fa-w-18 {\n  width: 1.125em;\n}\n....},o={1:0},u=[];function p(r){if(n[r])return n[r].exports;var t=n[r]={i:r,l:!1,exports:{}};return e[r].call(t.exports,t,t.exports,p),t.l=!0,t.exports}p.m=e,p.c=n,p.d=function(e,r,t){p.o(e,r)||Object.defineProperty(e,r,{enumerable:!0,get:t})},p.r=function(e){&quot;undefined&quot;!=typeof Symbol&amp;&amp;Symbol.toStringTag&amp;&amp;Object.defineProperty(e,Symbol.toStringTag,{value:&quot;Module&quot;}),Object.defineProperty(e,&quot;__esModule&quot;,{value:!0})},p.t=function(e,r){if(1&amp;r&amp;&amp;(e=p(e)),8&amp;r)return e;if(4&amp;r&amp;&amp;&quot;object&quot;==typeof e&amp;&amp;e&amp;&amp;e.__esModule)return e;var t=Object.create(null);if(p.r(t),Object.defineProperty(t,&quot;default&quot;,{enumerable:!0,value:e}),2&amp;r&amp;&amp;&quot;string&quot;!=typeof e)for(var n in e)p.d(t,n,function(r){return e[r]}.bind(null,n));return t},p.n=function(e){var r=e&amp;&amp;e.__esModule?function(){return e.default}:function(){return e};return p.d(r,&quot;a&quot;,r),r},p.o=function(e,r){return Object.prototype.hasOwnProperty.call(e,r)},p.p=&quot;/&quot;;var l=this[&quot;webpackJsonpsample-app-web&quot;]=this[&quot;webpackJsonpsample-app-web&quot;]||[],a=l.push.bind(l);l.push=r,l=l.slice();for(var f=0;f&lt;l.length;f++)r(l[f]);var i=a;t()}([])&lt;/script&gt;&lt;script src=&quot;/static/js/2.a1a947cf.chunk.js&quot;&gt;&lt;/script&gt;&lt;script src=&quot;/static/js/main.3db41035.chunk.js&quot;&gt;&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;&#x27; = &lt;selenium.webdriver.firefox.webdriver.WebDriver (session=&quot;3e6700b5-e99c-46af-96eb-43b250b6cecc&quot;)&gt;.page_source</span><br/><br/>advanced_test.py:41: AssertionError<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">advanced_test.py::test_launch_login_page</td>
+          <td class="col-duration">9.80</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">advanced_test.py::test_login_valid_credentials</td>
+          <td class="col-duration">9.57</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">advanced_test.py::test_view_product_details</td>
+          <td class="col-duration">8.75</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">advanced_test.py::test_item_price</td>
+          <td class="col-duration">9.10</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="log"> ------------------------------Captured stdout call------------------------------ <br/>$29.99
+<br/></div></td></tr></tbody>
+      <tbody class="passed results-table-row">
+        <tr>
+          <td class="col-result">Passed</td>
+          <td class="col-name">advanced_test.py::test_add_item_to_cart</td>
+          <td class="col-duration">9.34</td>
+          <td class="col-links"></td></tr>
+        <tr>
+          <td class="extra" colspan="4">
+            <div class="empty log">No log output captured.</div></td></tr></tbody></table></body></html>
